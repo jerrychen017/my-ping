@@ -12,8 +12,10 @@
 
 #include <netdb.h>
 #include <netinet/ip.h>
+#include <netinet/ip6.h>
 #include <netinet/in.h>
 #include <netinet/ip_icmp.h>
+#include <netinet/icmp6.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
 
@@ -27,8 +29,18 @@
 #include <errno.h>
 
 #include <sys/time.h>
+#define ICMP_LEN 16
+#define ICMP_HDRLEN 8
+struct icmp6
+{
+    struct icmp6_hdr hdr;
+    char data[ICMP_LEN - sizeof(struct icmp6_hdr)];
+};
 
 unsigned short checksum(void *buffer, int len);
 struct timeval diff_time(struct timeval left, struct timeval right);
+uint16_t
+icmp6_checksum(struct ip6_hdr iphdr, struct icmp6_hdr icmp6hdr, uint8_t *payload, int payloadlen);
+char *allocate_strmem(int len);
 
 #endif
