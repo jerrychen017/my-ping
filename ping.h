@@ -18,6 +18,7 @@
 #include <netinet/icmp6.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
 
 #include <string.h>
 
@@ -31,11 +32,7 @@
 #include <sys/time.h>
 #define ICMP_LEN 16
 #define ICMP_HDRLEN 8
-struct icmp6
-{
-    struct icmp6_hdr hdr;
-    char data[ICMP_LEN - sizeof(struct icmp6_hdr)];
-};
+#define IP6_HDRLEN 40
 
 unsigned short checksum(void *buffer, int len);
 struct timeval diff_time(struct timeval left, struct timeval right);
