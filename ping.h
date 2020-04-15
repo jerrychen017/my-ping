@@ -28,5 +28,6 @@
 #include <sys/time.h>
 
 unsigned short checksum(void *buffer, int len);
+struct timeval diff_time(struct timeval left, struct timeval right);
 
 #endif

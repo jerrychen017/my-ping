@@ -1,7 +1,7 @@
 #include "ping.h"
 
 /**
- * A ping program that is a clone to the ping program on MacOs 
+ * An implementation of the PING program
  */
 int main(int argc, char *argv[])
 {
@@ -27,42 +27,24 @@ int main(int argc, char *argv[])
     memset(&ping_address, 0, sizeof(struct sockaddr_in)); // init ping_address
     struct sockaddr_in reply_address;
     int sk;
-    int server_fd;
+    struct icmp ping_packet;
+    struct icmp recv_packet;
+    int ret; // holds returned values
+    int num;
 
-    memcpy(&hostname_cp, hostname, sizeof(hostname_cp));
-    memcpy(&server_fd, hostname_cp.h_addr_list[0], sizeof(server_fd));
-    ping_address.sin_family = hostname->h_addrtype;
-    // ping_address.sin_family = AF_INET;
-    ping_address.sin_addr.s_addr = *(long *)hostname->h_addr;
-    // ping_address.sin_addr.s_addr = server_fd;
-    // memcpy(&ping_address.sin_addr, hostname->h_addr, sizeof(ping_address.sin_addr));
+    ping_address.sin_family = AF_INET;
+    memcpy(&ping_address.sin_addr, hostname->h_addr, sizeof(ping_address.sin_addr));
     ping_address.sin_port = htons(port);
-    // ping_address.sin_port = port;
-
-    // send a ping
 
     // setup socket
-    sk = socket(AF_INET, SOCK_RAW, protocol->p_proto);
+    sk = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (sk < 0)
     {
         printf("ping: socket error\n");
         return 1;
     }
 
-    const int val = 255;
-    // setsockopt(sk, SOL_SOCKET, IP_TTL, &val, sizeof(val));
-    // fcntl(sk, F_SETFL, O_NONBLOCK);
-
-    struct icmp ping_packet;
-    char packet[192];
-
-    struct icmp recv_packet;
-
-    int ret;
-    int num;
-
     // initialize packet
-    // ping_packet = (struct icmp *)packet;
     memset(&ping_packet, 0, sizeof(ping_packet));
     ping_packet.icmp_type = ICMP_ECHO;
     ping_packet.icmp_cksum = checksum(&ping_packet, sizeof(ping_packet));
@@ -75,13 +57,13 @@ int main(int argc, char *argv[])
     FD_ZERO(&mask);
     FD_SET(sk, &mask);
 
-    ret = sendto(sk, &ping_packet, sizeof(ping_packet), 0,
-                 (struct sockaddr *)&ping_address, sizeof(ping_address));
-    printf("send status ret %d\n", ret);
+    // ret = sendto(sk, &ping_packet, sizeof(ping_packet), 0,
+    //              (struct sockaddr *)&ping_address, sizeof(ping_address));
+    // printf("send status ret %d\n", ret);
+    // gettimeofday(&time_sent, NULL);
 
-    ret = sendto(sk, &ping_packet, sizeof(ping_packet), 0,
-                 (struct sockaddr *)&ping_address, sizeof(ping_address));
-    printf("send status ret %d\n", ret);
+    int num_sent = 0;
+
     for (;;)
     {
         read_mask = mask;
@@ -104,69 +86,63 @@ int main(int argc, char *argv[])
                 // double msec = diff_time.tv_sec * 1000 + ((double)diff_time.tv_usec) / 1000;
                 // sprintf(out, "Report: RTT of a UDP packet is %f ms with sequence number %d\n", msec, echo_packet.seq);
                 printf("received an icmp packet with ret %d\n", ret);
-                if (recv_packet.icmp_type == ICMP_ECHOREPLY)
+                if (recv_packet.icmp_type == ICMP_ECHOREPLY || recv_packet.icmp_code == 0)
                 {
                     printf("reply packet!\n");
                 }
-                // return 0; // terminate after report
+                else
+                {
+                    printf("type is %d\n", recv_packet.icmp_type);
+                }
             }
         }
         else
         {
-            // printf("Haven't heard response for over %d seconds, timeout!\n", 1);
             ret = sendto(sk, &ping_packet, sizeof(ping_packet), 0,
                          (struct sockaddr *)&ping_address, sizeof(ping_address));
             printf("send status ret %d\n", ret);
-
-            // ret = sendto(sk, &ping_packet, sizeof(ping_packet), 0,
-            //              (struct sockaddr *)&ping_address, sizeof(ping_address));
-            // printf("send status ret %d\n", ret);
-
-            // return 0;
         }
     }
 
     return 0;
 }
 
-// int checksum(unsigned short *buffer, int len)
-// {
-//     int csum = 0;
-//     int count_to = (len / 2) * 2;
-//     int count = 0;
-//     while (count < count_to)
-//     {
-//         int cur_val = buffer[count + 1] * 256 + buffer[count];
-//         csum = csum + cur_val;
-//         csum = csum & 0xffffffff;
-//         count += 2;
-//     }
-
-//     if (count_to < len)
-//     {
-//         csum = csum + buffer[len - 1];
-//         csum = csum & 0xffffffff;
-//     }
-
-//     csum = (csum >> 16) + (csum & 0xffff);
-//     csum = csum + (csum >> 16);
-//     int result = ~csum;
-//     result = result & 0xffff;
-//     result = result >> 8 | (result << 8 & 0xff00);
-//     return result;
-// }
-unsigned short checksum(void *b, int len)
+// calculate checksum
+unsigned short checksum(void *ptr, int len)
 {
-    unsigned short *buf = b;
-    unsigned int sum = 0;
-    unsigned short result;
+    int sum = 0;
+    int count_to = (len / 2) * 2;
+    int count = 0;
+    unsigned short *buffer = ptr;
+    while (count < count_to)
+    {
+        sum += *(buffer++);
+        count += 2;
+    }
 
-    for (sum = 0; len > 1; len -= 2)
-        sum += *buf++;
-    if (len == 1)
-        sum += *(unsigned char *)buf;
-    sum = (sum >> 16) + (sum & 0xFFFF);
+    if (count_to < len)
+    {
+        sum += *buffer;
+    }
+
+    sum = (sum >> 16) + (sum & 0xffff);
     sum += (sum >> 16);
-    result = ~sum;
-    return result;
+    return ~sum;
+}
+
+struct timeval diff_time(struct timeval left, struct timeval right)
+{
+    struct timeval diff;
+    diff.tv_sec = left.tv_sec - right.tv_sec;
+    diff.tv_usec = left.tv_usec - right.tv_usec;
+    if (diff.tv_usec < 0)
+    {
+        diff.tv_usec += 1000000;
+        diff.tv_sec--;
+    }
+    if (diff.tv_sec < 0)
+    {
+        diff.tv_sec = diff.tv_usec = 0;
+    }
+    return diff;
 }
