@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include <time.h>
+#include <stdbool.h>
 // #include <float.h>
 #include <math.h>
 
