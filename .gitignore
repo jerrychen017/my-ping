@@ -1,3 +1,4 @@
 # ignore object and executable files
 *.o
 ping
+.vscode*
