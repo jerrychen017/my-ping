@@ -18,6 +18,7 @@ int main(int argc, char *argv[])
     int ttl = -1;
     bool use_ttl = false;
     int ret; // holds returned status values
+    int count = 0;
 
     // read the rest args
     for (int i = 2; i < argc; i++)
@@ -49,6 +50,30 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-IPV6") == 0)
         {
             use_ipv6 = true;
+        }
+        else if (strcmp(argv[i], "-verbose") == 0)
+        {
+        }
+        else if (strcmp(argv[i], "-c") == 0)
+        {
+            if (i == argc - 1)
+            { // last argument
+                // print menu
+                display_menu();
+                return 1;
+            }
+            else
+            {
+                count = atoi(argv[i + 1]);
+                if ((count == 0 && strcmp(argv[i + 1], "0") != 0) || count < 0)
+                { // invalid conversion if return value is 0 and input string is not "0"
+                    // or the value is less than 0
+                    //report error
+                    printf("ping: invalid count: `%s`\n", argv[i + 1]);
+                    return 1;
+                }
+                i++; // skip next iteration
+            }
         }
         else
         {
@@ -205,7 +230,7 @@ int main(int argc, char *argv[])
 
     FD_ZERO(&mask);
     FD_SET(sk, &mask);
-    for (;;)
+    for (int i = 0; i < count;;)
     {
         read_mask = mask;
         timeout.tv_sec = 1;
@@ -338,6 +363,7 @@ int main(int argc, char *argv[])
             num_sent++;
         }
     }
+    printf("PING program completed!\n");
     return 0;
 }
 
