@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS = -std=c99 -g -c -Wall -pedantic #-D_POSIX_SOURCE -D_GNU_SOURCE
+CFLAGS = -std=c99 -g -c -Wall -pedantic
 
 ping: ping.o
 	$(CC) -o ping ping.o
