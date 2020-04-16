@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
                     }
                     else if (verbose)
                     {
-                        printf("received ICMPv6 packet with type %d and code %d", recv_type, recv_code);
+                        printf("received ICMPv6 packet with type %d and code %d\n", recv_type, recv_code);
                     }
 
                     if (verbose)
@@ -331,7 +331,7 @@ int main(int argc, char *argv[])
                     }
                     else if (verbose)
                     {
-                        printf("received ICMPv4 packet with type %d and code %d", recv_type, recv_code);
+                        printf("received ICMPv4 packet with type %d and code %d\n", recv_type, recv_code);
                     }
 
                     if (verbose)

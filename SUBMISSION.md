@@ -2,7 +2,7 @@
 
 Hey recruiters,
 I hope you are doing well in this pandemic. 
-Here's my ping program.  
+Here's my ping program. I've put quite an amount of time in it. Hope you enjoy it! 
 
 ## How to run
 - You need to have root access and `sudo` since I'm using SOCK_RAW. 
