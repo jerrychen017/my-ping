@@ -22,21 +22,18 @@
 #include <net/if.h>
 #include <netinet/if_ether.h>
 #include <ifaddrs.h>
-
 #include <string.h>
-
 #include <time.h>
 #include <stdbool.h>
-// #include <float.h>
 #include <math.h>
-
 #include <errno.h>
-
 #include <sys/time.h>
 #define ICMP_LEN 16
 #define ICMP_HDRLEN 8
 #define IP6_HDRLEN 40
 #define DATA_LEN 32
+#define TIMEOUT_SEC 1
+#define TIMEOUT_USEC 0
 
 // ICMPv6 echo request payload
 struct icmp6_echo_request

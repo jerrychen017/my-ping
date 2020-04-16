@@ -18,7 +18,8 @@ int main(int argc, char *argv[])
     int ttl = -1;
     bool use_ttl = false;
     int ret; // holds returned status values
-    int count = 0;
+    int count = -1;
+    bool verbose = false;
 
     // read the rest args
     for (int i = 2; i < argc; i++)
@@ -53,6 +54,7 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(argv[i], "-verbose") == 0)
         {
+            verbose = true;
         }
         else if (strcmp(argv[i], "-c") == 0)
         {
@@ -230,11 +232,11 @@ int main(int argc, char *argv[])
 
     FD_ZERO(&mask);
     FD_SET(sk, &mask);
-    for (int i = 0; i < count;;)
+    for (;;)
     {
         read_mask = mask;
-        timeout.tv_sec = 1;
-        timeout.tv_usec = 0;
+        timeout.tv_sec = TIMEOUT_SEC;
+        timeout.tv_usec = TIMEOUT_USEC;
         num = select(FD_SETSIZE, &read_mask, NULL, NULL, &timeout);
         if (num > 0)
         {
@@ -278,15 +280,19 @@ int main(int argc, char *argv[])
                             printf("received out of order ICMPv6, icmp6_seq=%d\n", recv_seq);
                         }
                     }
-                    else
+                    else if (verbose)
                     {
-                        // printf("type is %d and code is %d", recv_type, recv_code);
+                        printf("received ICMPv6 packet with type %d and code %d", recv_type, recv_code);
                     }
-                    // verbose mode ?
-                    // for (int i = 0; i < 60; i++)
-                    // {
-                    //     printf("  %02x", recv_icmp6_packet[i] & 0xff);
-                    // }
+
+                    if (verbose)
+                    { // print the whole packet
+                        for (int i = 0; i < icmp6_pkt_len; i++)
+                        {
+                            printf("  %02x", recv_icmp6_packet[i] & 0xff);
+                        }
+                        printf("\n");
+                    }
                 }
                 else
                 {
@@ -323,15 +329,33 @@ int main(int argc, char *argv[])
                             printf("received out of order ICMPv4, icmp4_seq=%d\n", recv_seq);
                         }
                     }
-                    else
+                    else if (verbose)
                     {
-                        printf("type is %d and code is %d", recv_type, recv_code);
+                        printf("received ICMPv4 packet with type %d and code %d", recv_type, recv_code);
+                    }
+
+                    if (verbose)
+                    { // print the whole packet
+                        for (int i = 0; i < sizeof(recv_ip_packet); i++)
+                        {
+                            printf("  %02x", recv_ip_packet[i] & 0xff);
+                        }
+                        printf("\n");
                     }
                 }
             }
         }
         else
         {
+            // breakout if count reached 0
+            if (count == 0)
+            {
+                break;
+            }
+            else
+            {
+                count--;
+            }
             // last sent packet wasn't echoed back
             if (last_recv_seq != (num_sent - 1))
             {
@@ -460,5 +484,5 @@ struct timeval diff_time(struct timeval left, struct timeval right)
 
 void display_menu()
 {
-    printf("usage: ping <address> [-IPV6] [-TTL <number between 0 and 255>]\n");
+    printf("usage: ping <address> [-IPV6] [-TTL <number between 0 and 255>] [-c <count>] [-verbose]\n");
 }
