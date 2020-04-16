@@ -8,8 +8,8 @@ int main(int argc, char *argv[])
     // display help menu
     if (argc < 2)
     {
-        printf("usage:\n");
-        return 0;
+        display_menu();
+        return 1;
     }
     // host name or ip address
     const char *host = argv[1];
@@ -27,6 +27,7 @@ int main(int argc, char *argv[])
             if (i == argc - 1)
             { // last argument
                 // print menu
+                display_menu();
                 return 1;
             }
             else
@@ -53,6 +54,7 @@ int main(int argc, char *argv[])
         {
             // invalid argument
             // display menu
+            display_menu();
             return 1;
         }
     }
@@ -92,8 +94,12 @@ int main(int argc, char *argv[])
     int recv_seq_num; // received sequence number
     int recv_type;    // received type
     int recv_code;    // received code
+    int recv_seq;     // received resquence number
     fd_set mask;
     fd_set read_mask;
+    struct timeval rtt;
+    double rtt_msec;
+    int num_loss;
 
     if (use_ipv6)
     {
@@ -163,6 +169,12 @@ int main(int argc, char *argv[])
         rend_icmp6_req_ptr = (struct icmp6_echo_request *)(icmp6_pkt + sizeof(struct icmp6_hdr));
         rend_icmp6_req_ptr->icmp6_echo_id = pid;
         rend_icmp6_req_ptr->icmp6_echo_sequence = 0;
+
+        // setup TTL
+        if (use_ttl)
+        {
+            ret = setsockopt(sk, IPPROTO_IPV6, IPV6_UNICAST_HOPS, (char *)&ttl, sizeof(ttl));
+        }
     }
     else
     {
@@ -183,6 +195,12 @@ int main(int argc, char *argv[])
             printf("ping: socket error\n");
             exit(1);
         }
+
+        // setup TTL
+        if (use_ttl)
+        {
+            ret = setsockopt(sk, IPPROTO_IP, IP_TTL, (char *)&ttl, sizeof(ttl));
+        }
     }
 
     FD_ZERO(&mask);
@@ -202,25 +220,41 @@ int main(int argc, char *argv[])
                 {
                     ret = recvfrom(sk, recv_icmp6_packet, icmp6_pkt_len, 0,
                                    (struct sockaddr *)&ping6_reply_address, &recv_ipv6_addr_len);
+                    gettimeofday(&time_received, NULL); // recourd received time
+
+                    // setup pointers
                     recv_icmp6_hdr_ptr = (struct icmp6_hdr *)(recv_icmp6_packet);
                     recv_icmp6_req_ptr = (struct icmp6_echo_request *)(recv_icmp6_packet + sizeof(struct icmp6_hdr));
                     recv_type = recv_icmp6_hdr_ptr->icmp6_type; // get received ICMPv6 type
                     recv_code = recv_icmp6_hdr_ptr->icmp6_code; // get received ICMPv6 code
-
+                    recv_seq = recv_icmp6_req_ptr->icmp6_echo_sequence;
                     if (recv_type == ICMP6_ECHO_REPLY && recv_code == 0)
                     { // ICMP6_ECHO_REPLY 129
-                        // record current time and report
-                        gettimeofday(&time_received, NULL);
-                        num_received++;
-                        struct timeval rtt = diff_time(time_received, time_sent);
-                        double rtt_msec = rtt.tv_sec * 1000 + ((double)rtt.tv_usec) / 1000;
 
-                        printf("Report: RTT of a PING packet is %f ms with sequence number %d\n", rtt_msec, recv_icmp6_req_ptr->icmp6_echo_sequence);
-                        printf("%d packets lost\n", num_sent - num_received);
+                        //received packet PING just sent
+                        if (recv_seq == (num_sent - 1))
+                        {
+                            num_received++;
+                            rtt = diff_time(time_received, time_sent);
+                            rtt_msec = rtt.tv_sec * 1000 + ((double)rtt.tv_usec) / 1000;
+                            num_loss = num_sent - num_received;
+                            if (use_ttl)
+                            {
+                                printf("received ICMPv6, icmp6_seq=%d, TTL=%d, RTT=%.3fms, PKT_LOSS=%d\n", recv_seq, ttl, rtt_msec, num_loss);
+                            }
+                            else
+                            {
+                                printf("received ICMPv6, icmp6_seq=%d, RTT=%.3fms, PKT_LOSS=%d\n", recv_seq, rtt_msec, num_loss);
+                            }
+                        }
+                        else
+                        { // out of order packet
+                            printf("received out of order ICMPv6, icmp6_seq=%d\n", recv_seq);
+                        }
                     }
                     else
                     {
-                        printf("type is %d and code is %d", recv_type, recv_code);
+                        // printf("type is %d and code is %d", recv_type, recv_code);
                     }
                     // verbose mode ?
                     // for (int i = 0; i < 60; i++)
@@ -232,25 +266,39 @@ int main(int argc, char *argv[])
                 {
                     ret = recvfrom(sk, recv_ip_packet, sizeof(recv_ip_packet), 0,
                                    (struct sockaddr *)&reply_address, &rely_address_len);
+                    gettimeofday(&time_received, NULL);
+                    // setup pointers
                     recv_ip_ptr = (struct ip *)recv_ip_packet;
                     recv_icmp_ptr = recv_ip_packet + (recv_ip_ptr->ip_hl << 2);
                     recv_type = recv_icmp_ptr->icmp_type; // get ICMPv4 type
                     recv_code = recv_icmp_ptr->icmp_code; // get ICMPv4 code
                     if (recv_type == ICMP_ECHOREPLY && recv_code == 0)
                     { // ICMP_ECHOREPLY 0
-                        // record current time and report
-                        gettimeofday(&time_received, NULL);
                         num_received++;
-                        struct timeval rtt = diff_time(time_received, time_sent);
-                        double rtt_msec = rtt.tv_sec * 1000 + ((double)rtt.tv_usec) / 1000;
-                        printf("Report: RTT of a PING packet is %f ms with sequence number %d\n", rtt_msec, recv_icmp_ptr->icmp_seq);
-                        printf("%d packets lost\n", num_sent - num_received);
+                        rtt = diff_time(time_received, time_sent);
+                        rtt_msec = rtt.tv_sec * 1000 + ((double)rtt.tv_usec) / 1000;
+                        num_loss = num_sent - num_received;
+                        if (use_ttl)
+                        {
+                            printf("received ICMPv4, icmp4_seq=%d, TTL=%d, RTT=%.3fms, PKT_LOSS=%d\n", recv_icmp_ptr->icmp_seq, ttl, rtt_msec, num_loss);
+                        }
+                        else
+                        {
+                            printf("received ICMPv4, icmp4_seq=%d, RTT=%.3fms, PKT_LOSS=%d\n", recv_icmp_ptr->icmp_seq, rtt_msec, num_loss);
+                        }
+                    }
+                    else
+                    {
+                        printf("type is %d and code is %d", recv_type, recv_code);
                     }
                 }
             }
         }
         else
         {
+            if (recv_seq == num_sent - 1)
+            {
+            }
             // sending an ICMP packet
             // sending a packet
             if (use_ipv6)
@@ -259,7 +307,6 @@ int main(int argc, char *argv[])
                 send_icmp6_hdr_ptr->icmp6_cksum = icmp6_checksum(ipv6_src_addr, ipv6_dest_addr, icmp6_pkt, icmp6_pkt_len);
                 ret = sendto(sk, icmp6_pkt, icmp6_pkt_len, 0,
                              (struct sockaddr *)&ping6_address, sizeof(struct sockaddr_in6));
-                printf("IPV6 packet sent\n");
             }
             else
             {
@@ -273,7 +320,7 @@ int main(int argc, char *argv[])
                 ret = sendto(sk, &ping_packet, sizeof(ping_packet), 0,
                              (struct sockaddr *)&ping_address, sizeof(ping_address));
             }
-
+            // record sending time
             gettimeofday(&time_sent, NULL);
             num_sent++;
         }
@@ -370,4 +417,9 @@ struct timeval diff_time(struct timeval left, struct timeval right)
         diff.tv_sec = diff.tv_usec = 0;
     }
     return diff;
+}
+
+void display_menu()
+{
+    printf("usage: ping <address> [-IPV6] [-TTL <number between 0 and 255>]\n");
 }

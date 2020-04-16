@@ -48,5 +48,5 @@ struct icmp6_echo_request
 unsigned short icmp6_checksum(struct sockaddr_in6 *ipv6_src_addr, struct sockaddr_in6 *ipv6_dest_addr, char *icmp6_pkt, int icmp6_pkt_len);
 unsigned short checksum(void *buffer, int len);
 struct timeval diff_time(struct timeval left, struct timeval right);
-
+void display_menu();
 #endif
