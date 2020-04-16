@@ -73,16 +73,14 @@ int main(int argc, char *argv[])
     struct sockaddr_in6 reply_address6;
     socklen_t rely_address6_len;
     struct icmp6_hdr send_icmp6_hdr;
-    // struct icmp6 ping6_packet;
     struct ip6_hdr send_ip_hdr, *recv_ip6_ptr; // IPv6 header pointer
-    // struct icmp6 *recv_icmp6_ptr;
     struct icmp6_hdr *recv_icmp6_hdr_ptr;
     char *source_ip, *dest_ip, *target;
     struct addrinfo hints, *res;
     void *tmp;
     int data_len;
     uint8_t *data;
-    uint8_t *recv_ip6_packet, *send_ip6_packet;
+    uint8_t *recv_ip6_packet, *send_icmp6_packet;
 
     // uesd for both IPv6 and IPv4
     int pid = getpid(); // process id
@@ -110,8 +108,8 @@ int main(int argc, char *argv[])
         data = (uint8_t *)malloc(IP_MAXPACKET * sizeof(uint8_t));
         memset(data, 0, IP_MAXPACKET * sizeof(uint8_t));
 
-        send_ip6_packet = (uint8_t *)malloc(IP_MAXPACKET * sizeof(uint8_t));
-        memset(send_ip6_packet, 0, IP_MAXPACKET * sizeof(uint8_t));
+        send_icmp6_packet = (uint8_t *)malloc(ICMPV6_PLD_MAXLEN * sizeof(uint8_t));
+        memset(send_icmp6_packet, 0, ICMPV6_PLD_MAXLEN * sizeof(uint8_t));
 
         recv_ip6_packet = (uint8_t *)malloc(IP_MAXPACKET * sizeof(uint8_t));
         memset(recv_ip6_packet, 0, IP_MAXPACKET * sizeof(uint8_t));
@@ -131,7 +129,7 @@ int main(int argc, char *argv[])
         {
             perror("getifaddrs failed");
             exit(1);
-                }
+        }
 
         ifa_tmp = ifa;
         while (ifa_tmp)
@@ -228,12 +226,10 @@ int main(int argc, char *argv[])
         ping_address6.sin6_port = htons(port);
         // setup socket
 
-        // copy IPv6 header
-        memcpy(send_ip6_packet, &send_ip_hdr, IP6_HDRLEN * sizeof(uint8_t));
         // copy ICMP header
-        memcpy(send_ip6_packet + IP6_HDRLEN, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
+        memcpy(send_icmp6_packet, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
         // copy ICMP data
-        memcpy(send_ip6_packet + IP6_HDRLEN + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
+        memcpy(send_icmp6_packet + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
 
         recv_ip6_ptr = (struct ip6_hdr *)(recv_ip6_packet);
         recv_icmp6_hdr_ptr = (struct icmp6_hdr *)(recv_ip6_packet + IP6_HDRLEN);
@@ -342,16 +338,14 @@ int main(int argc, char *argv[])
                 // unsigned short data[] = {}; //as beforep
                 // char tmp[16];
                 // memcpy(tmp, dest_ip, 16);
-                // copy IPv6 header
-                memcpy(send_ip6_packet, &send_ip_hdr, IP6_HDRLEN * sizeof(uint8_t));
+
                 // copy ICMP header
-                memcpy(send_ip6_packet + IP6_HDRLEN, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
+                memcpy(send_icmp6_packet, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
                 // copy ICMP data
-                memcpy(send_ip6_packet + IP6_HDRLEN + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
-                // ping6_packet.hdr.icmp6_cksum = checksum(&ping6_packet, sizeof(ping6_packet));
+                memcpy(send_icmp6_packet + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
                 send_icmp6_hdr.icmp6_cksum = icmp6_checksum(send_ip_hdr, send_icmp6_hdr, data, data_len);
 
-                ret = sendto(sk, send_ip6_packet, sizeof(*send_ip6_packet), 0,
+                ret = sendto(sk, send_icmp6_packet, sizeof(*send_icmp6_packet), 0,
                              (struct sockaddr *)&ping_address6, sizeof(ping_address6));
                 // ret = sendto(sk, &ping6_packet, sizeof(ping6_packet), 0,
                 //              res->ai_addr, sizeof(res->ai_addrlen));
