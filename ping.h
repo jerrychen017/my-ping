@@ -18,6 +18,9 @@
 #include <netinet/icmp6.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <netinet/if_ether.h>
 #include <ifaddrs.h>
 
 #include <string.h>
@@ -34,7 +37,8 @@
 #define ICMP_HDRLEN 8
 #define IP6_HDRLEN 40
 
-unsigned short checksum(void *buffer, int len);
+unsigned short
+checksum(void *buffer, int len);
 struct timeval diff_time(struct timeval left, struct timeval right);
 uint16_t
 icmp6_checksum(struct ip6_hdr iphdr, struct icmp6_hdr icmp6hdr, uint8_t *payload, int payloadlen);

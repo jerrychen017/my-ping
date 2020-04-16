@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     }
     // host name or ip address
     const char *host = argv[1];
-    int port = 0;
+    int port = 10;
     bool use_ipv6 = false;
     int ttl = -1;
     bool use_ttl = false;
@@ -81,6 +81,7 @@ int main(int argc, char *argv[])
     int data_len;
     uint8_t *data;
     uint8_t *recv_ip6_packet, *send_icmp6_packet;
+    struct sockaddr_in6 *in6;
 
     // uesd for both IPv6 and IPv4
     int pid = getpid(); // process id
@@ -123,46 +124,64 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        recv_sk = socket(AF_INET6, SOCK_RAW, IPPROTO_IPV6);
-        if (recv_sk < 0)
-        {
-            printf("IPv6: recv socket error\n");
-            exit(1);
-        }
+        // hostname = gethostbyname(host);
+        // if (!hostname)
+        // {
+        //     printf("cannot resolve hostname\n");
+        //     exit(1);
+        // }
 
-        struct ifaddrs *ifa, *ifa_tmp;
+        // struct ifaddrs *ifa, *ifa_tmp;
+        // char addr[50];
+        // bool my_addr_found = false;
+        // if (getifaddrs(&ifa) == -1)
+        // {
+        //     perror("getifaddrs failed");
+        //     exit(1);
+        // }
+
+        // ifa_tmp = ifa;
+        // while (ifa_tmp)
+        // {
+        //     if ((ifa_tmp->ifa_addr) && (ifa_tmp->ifa_addr->sa_family == AF_INET6))
+        //     {
+        //         // AF_INET6
+        //         // create IPv6 string
+        //         struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)ifa_tmp->ifa_addr;
+        //         inet_ntop(AF_INET6, &in6->sin6_addr, addr, sizeof(addr));
+        //         if (strlen(ifa_tmp->ifa_name) >= 2 && ifa_tmp->ifa_name[0] == 'e' && ifa_tmp->ifa_name[1] == 'n')
+        //         {
+        //             // ethernet interface
+        //             my_addr_found = true;
+        //             strcpy(source_ip, addr);
+        //             break;
+        //         }
+        //     }
+        //     ifa_tmp = ifa_tmp->ifa_next;
+        // }
+        // if (!my_addr_found)
+        // {
+        //     printf("source address not found on ethernet interface\n");
+        //     exit(1);
+        // }
+
         char addr[50];
-        bool my_addr_found = false;
-        if (getifaddrs(&ifa) == -1)
-        {
-            perror("getifaddrs failed");
-            exit(1);
-        }
-
-        ifa_tmp = ifa;
-        while (ifa_tmp)
-        {
-            if ((ifa_tmp->ifa_addr) && (ifa_tmp->ifa_addr->sa_family == AF_INET6))
-            {
-                // AF_INET6
-                // create IPv6 string
-                struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)ifa_tmp->ifa_addr;
-                inet_ntop(AF_INET6, &in6->sin6_addr, addr, sizeof(addr));
-                if (strlen(ifa_tmp->ifa_name) >= 2 && ifa_tmp->ifa_name[0] == 'e' && ifa_tmp->ifa_name[1] == 'n')
-                {
-                    // ethernet interface
-                    my_addr_found = true;
-                    strcpy(source_ip, addr);
-                    break;
-                }
-            }
-            ifa_tmp = ifa_tmp->ifa_next;
-        }
-        if (!my_addr_found)
-        {
-            printf("source address not found on ethernet interface\n");
-            exit(1);
-        }
+        int fd;
+        struct ifreq ifr;
+        fd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+        /* I want to get an IPv6 IP address */
+        ifr.ifr_addr.sa_family = AF_INET6;
+        /* I want IP address attached to "eth0" */
+        strncpy(ifr.ifr_name, "eth0", IFNAMSIZ - 1);
+        ioctl(fd, SIOCGIFADDR, &ifr);
+        close(fd);
+        /* display result */
+        in6 = (struct sockaddr_in6 *)&ifr.ifr_addr;
+        inet_ntop(AF_INET6, &(in6->sin6_addr), addr, sizeof(addr));
+        // printf("%s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+        printf("addr is %s", addr);
+        strcpy(source_ip, addr);
+        // return 0;
 
         strcpy(target, argv[1]);
         // prepare hints for getaddrinfo().
@@ -225,8 +244,8 @@ int main(int argc, char *argv[])
         // init ping_address
         memset(&ping_address6, 0, sizeof(struct sockaddr_in6));
         ping_address6.sin6_family = AF_INET6;
-        // memcpy(&ping_address6.sin6_addr, &(ipv6->sin6_addr), sizeof(ping_address6.sin6_addr));
         memcpy(&ping_address6.sin6_addr, &(ipv6->sin6_addr), sizeof(ping_address6.sin6_addr));
+        // memcpy(&ping_address6.sin6_addr, hostname->h_addr, sizeof(ping_address6.sin6_addr));
         ping_address6.sin6_port = htons(port);
 
         recv_ip6_ptr = (struct ip6_hdr *)(recv_ip6_packet);
@@ -271,9 +290,25 @@ int main(int argc, char *argv[])
                                    (struct sockaddr *)&reply_address6, &rely_address6_len);
                     // int server_ip = client_addr.sin_addr.s_addr;
                     // recv_ip6_ptr = (struct ip6_hdr *)recv_ip6_packet;
-                    // recv_icmp6_ptr = recv_ip_packet + (sizeof(struct ip6_hdr) << 2);
+                    // recv_icmp6_hdr_ptr = recv_ip6_packet + (sizeof(struct ip6_hdr) << 2);
                     printf("received num is %d\n", ret);
 
+                    // recv_ip6_ptr = (struct ip6_hdr *)(recv_ip6_packet);
+                    if (recv_ip6_ptr)
+                    {
+                        char addr1[50];
+
+                        char addr2[50];
+                        inet_ntop(AF_INET6, &(recv_ip6_ptr->ip6_src), addr1, sizeof(addr1));
+                        inet_ntop(AF_INET6, &(recv_ip6_ptr->ip6_dst), addr2, sizeof(addr2));
+                        printf("source addr is %s and dest address is %s\n", addr1, addr2);
+                    }
+                    else
+                    {
+                        printf("null\n");
+                    }
+
+                    recv_icmp6_hdr_ptr = (struct icmp6_hdr *)(recv_ip6_packet + IP6_HDRLEN);
                     // record current time and report
                     gettimeofday(&time_received, NULL);
                     num_received++;
@@ -325,31 +360,41 @@ int main(int argc, char *argv[])
                 send_icmp6_hdr.icmp6_id = pid;
                 send_icmp6_hdr.icmp6_seq = num_sent;
                 send_icmp6_hdr.icmp6_cksum = 0;
-                send_icmp6_hdr.icmp6_cksum = icmp6_checksum(send_ip_hdr, send_icmp6_hdr, data, data_len);
 
-                // char buff[sizeof(ping_packet) + 16 + 3];
-                // unsigned short src_ip[8] = { 0 } //fill the source IP
-                // unsigned short dst_ip[8] = { 0 } //fill the destination IP
-                // //0x0020 is the packet length of ICMPv6
-                // //fill 3bytes of zero and 0x3a is the type of ICMPv6, so we have
-                // //0x00, 0x003a
-                // unsigned short remain[] = {0x0020,
-                //                            0x0000,
-                //                            0x003a};
-                // unsigned short data[] = {}; //as beforep
-                // char tmp[16];
-                // memcpy(tmp, dest_ip, 16);
+                int pkt_len = sizeof(send_icmp6_hdr) + 19 * sizeof(unsigned short);
+
+                char buff[pkt_len];
+                unsigned short src_ip[8] = {0}; //fill the source IP
+                unsigned short dst_ip[8] = {0}; //fill the destination IP
+                //0x0020 is the packet length of ICMPv6
+                //fill 3bytes of zero and 0x3a is the type of ICMPv6, so we have
+                //0x00, 0x003a
+                unsigned short remain[] = {0x0020,
+                                           0x0000,
+                                           0x003a};
+                unsigned short data[] = {}; //as beforep
+                memcpy(src_ip, &(send_ip_hdr.ip6_src), 8 * sizeof(unsigned short));
+                memcpy(dst_ip, &(send_ip_hdr.ip6_dst), 8 * sizeof(unsigned short));
+                memcpy(buff, src_ip, 8 * sizeof(unsigned short));
+                memcpy(buff + 8 * sizeof(unsigned short), dest_ip, 8 * sizeof(unsigned short));
+                memcpy(buff + 16 * sizeof(unsigned short), remain, 3 * sizeof(unsigned short));
+                memcpy(buff + 19 * sizeof(unsigned short) + sizeof(send_icmp6_hdr), &send_icmp6_hdr, sizeof(send_icmp6_hdr));
+
+                // send_icmp6_hdr.icmp6_cksum = icmp6_checksum(send_ip_hdr, send_icmp6_hdr, data, data_len);
+                send_icmp6_hdr.icmp6_cksum = checksum(&buff, pkt_len);
 
                 // copy ICMP header
                 memcpy(send_icmp6_packet, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
                 // copy ICMP data
                 memcpy(send_icmp6_packet + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
 
-                ret = sendto(sk, send_icmp6_packet, sizeof(*send_icmp6_packet), 0,
-                             (struct sockaddr *)&ping_address6, sizeof(ping_address6));
+                int len = ICMP_HDRLEN * sizeof(uint8_t) + data_len * sizeof(uint8_t);
+                ret = sendto(sk, buff, pkt_len, 0,
+                             (struct sockaddr *)&ping_address6, sizeof(struct sockaddr_in6));
                 printf("IPV6 packet sent\n");
                 // ret = sendto(sk, &ping6_packet, sizeof(ping6_packet), 0,
                 //              res->ai_addr, sizeof(res->ai_addrlen));
+                num_sent++;
             }
             else
             {
