@@ -38,19 +38,14 @@
 #define IP6_HDRLEN 40
 #define DATA_LEN 32
 
-// ICMPv6 echo request body
-
+// ICMPv6 echo request payload
 struct icmp6_echo_request
 {
     unsigned short icmp6_echo_sequence;
     unsigned short icmp6_echo_id;
 };
 
-unsigned short
-checksum(void *buffer, int len);
+unsigned short checksum(void *buffer, int len);
 struct timeval diff_time(struct timeval left, struct timeval right);
-uint16_t
-icmp6_checksum(struct ip6_hdr iphdr, struct icmp6_hdr icmp6hdr, uint8_t *payload, int payloadlen);
-char *allocate_strmem(int len);
 
 #endif
