@@ -91,9 +91,10 @@ int main(int argc, char *argv[])
     int num;                // for select
     int num_sent = 0;
     int num_received = 0;
-    int recv_type; // received type
-    int recv_code; // received code
-    int recv_seq;  // received resquence number
+    int recv_type;          // received type
+    int recv_code;          // received code
+    int recv_seq;           // received resquence number
+    int last_recv_seq = -1; // last correctly received resquence number
     fd_set mask;
     fd_set read_mask;
     struct timeval rtt;
@@ -233,6 +234,7 @@ int main(int argc, char *argv[])
                         //received packet PING just sent
                         if (recv_seq == (num_sent - 1))
                         {
+                            last_recv_seq = recv_seq;
                             num_received++;
                             rtt = diff_time(time_received, time_sent);
                             rtt_msec = rtt.tv_sec * 1000 + ((double)rtt.tv_usec) / 1000;
@@ -271,19 +273,29 @@ int main(int argc, char *argv[])
                     recv_icmp_ptr = (struct icmp *)(recv_ip_packet + (recv_ip_ptr->ip_hl << 2));
                     recv_type = recv_icmp_ptr->icmp_type; // get ICMPv4 type
                     recv_code = recv_icmp_ptr->icmp_code; // get ICMPv4 code
+                    recv_seq = recv_icmp_ptr->icmp_seq;
                     if (recv_type == ICMP_ECHOREPLY && recv_code == 0)
                     { // ICMP_ECHOREPLY 0
-                        num_received++;
-                        rtt = diff_time(time_received, time_sent);
-                        rtt_msec = rtt.tv_sec * 1000 + ((double)rtt.tv_usec) / 1000;
-                        num_loss = num_sent - num_received;
-                        if (use_ttl)
+                        //received packet PING just sent
+                        if (recv_seq == (num_sent - 1))
                         {
-                            printf("received ICMPv4, icmp4_seq=%d, TTL=%d, RTT=%.3fms, PKT_LOSS=%d\n", recv_icmp_ptr->icmp_seq, ttl, rtt_msec, num_loss);
+                            last_recv_seq = recv_seq;
+                            num_received++;
+                            rtt = diff_time(time_received, time_sent);
+                            rtt_msec = rtt.tv_sec * 1000 + ((double)rtt.tv_usec) / 1000;
+                            num_loss = num_sent - num_received;
+                            if (use_ttl)
+                            {
+                                printf("received ICMPv4, icmp4_seq=%d, TTL=%d, RTT=%.3fms, PKT_LOSS=%d\n", recv_seq, ttl, rtt_msec, num_loss);
+                            }
+                            else
+                            {
+                                printf("received ICMPv4, icmp4_seq=%d, RTT=%.3fms, PKT_LOSS=%d\n", recv_seq, rtt_msec, num_loss);
+                            }
                         }
                         else
-                        {
-                            printf("received ICMPv4, icmp4_seq=%d, RTT=%.3fms, PKT_LOSS=%d\n", recv_icmp_ptr->icmp_seq, rtt_msec, num_loss);
+                        { // out of order packet
+                            printf("received out of order ICMPv4, icmp4_seq=%d\n", recv_seq);
                         }
                     }
                     else
@@ -295,8 +307,10 @@ int main(int argc, char *argv[])
         }
         else
         {
-            if (recv_seq == num_sent - 1)
+            // last sent packet wasn't echoed back
+            if (last_recv_seq != (num_sent - 1))
             {
+                printf("timeout!\n");
             }
             // sending an ICMP packet
             // sending a packet
