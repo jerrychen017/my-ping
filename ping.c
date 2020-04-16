@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
     struct icmp6_echo_request *recv_icmp6_req_ptr, *rend_icmp6_req_ptr = NULL;                     // points to ICMPv6 type field
     struct sockaddr_in6 ping6_address, ping6_reply_address, *ipv6_dest_addr, *ipv6_src_addr;       // addresses
     socklen_t recv_ipv6_addr_len, ipv6_dest_addr_len, ipv6_addr_len = sizeof(struct sockaddr_in6); // socket len variables
-    struct icmp6_hdr send_icmp6_hdr, *recv_icmp6_hdr_ptr, *send_icmp6_hdr_ptr = NULL;              // ICMPv6 header and pointers to header
+    struct icmp6_hdr *recv_icmp6_hdr_ptr, *send_icmp6_hdr_ptr = NULL;                              // ICMPv6 header and pointers to header
     char source_ip[INET6_ADDRSTRLEN], dest_ip[INET6_ADDRSTRLEN], target[INET6_ADDRSTRLEN];         // IP addresses
     struct addrinfo hints, *res;
     char src_addr_str[50]; // source address string
@@ -91,10 +91,9 @@ int main(int argc, char *argv[])
     int num;                // for select
     int num_sent = 0;
     int num_received = 0;
-    int recv_seq_num; // received sequence number
-    int recv_type;    // received type
-    int recv_code;    // received code
-    int recv_seq;     // received resquence number
+    int recv_type; // received type
+    int recv_code; // received code
+    int recv_seq;  // received resquence number
     fd_set mask;
     fd_set read_mask;
     struct timeval rtt;
@@ -269,7 +268,7 @@ int main(int argc, char *argv[])
                     gettimeofday(&time_received, NULL);
                     // setup pointers
                     recv_ip_ptr = (struct ip *)recv_ip_packet;
-                    recv_icmp_ptr = recv_ip_packet + (recv_ip_ptr->ip_hl << 2);
+                    recv_icmp_ptr = (struct icmp *)(recv_ip_packet + (recv_ip_ptr->ip_hl << 2));
                     recv_type = recv_icmp_ptr->icmp_type; // get ICMPv4 type
                     recv_code = recv_icmp_ptr->icmp_code; // get ICMPv4 code
                     if (recv_type == ICMP_ECHOREPLY && recv_code == 0)
@@ -306,7 +305,7 @@ int main(int argc, char *argv[])
                 rend_icmp6_req_ptr->icmp6_echo_sequence = num_sent;
                 send_icmp6_hdr_ptr->icmp6_cksum = icmp6_checksum(ipv6_src_addr, ipv6_dest_addr, icmp6_pkt, icmp6_pkt_len);
                 ret = sendto(sk, icmp6_pkt, icmp6_pkt_len, 0,
-                             (struct sockaddr *)&ping6_address, sizeof(struct sockaddr_in6));
+                             (struct sockaddr *)&ping6_address, ipv6_addr_len);
             }
             else
             {
@@ -347,7 +346,7 @@ unsigned short icmp6_checksum(struct sockaddr_in6 *ipv6_src_addr, struct sockadd
     total_len += sizeof(struct in6_addr);
 
     // copy ICMPv6 packet length
-    int icmp6_len = htonl(ipv6_src_addr);
+    int icmp6_len = htonl((unsigned int)ipv6_src_addr);
     memcpy(tmp_ptr, &icmp6_len, sizeof(icmp6_len));
     tmp_ptr += sizeof(icmp6_len);
     total_len += sizeof(icmp6_len);
