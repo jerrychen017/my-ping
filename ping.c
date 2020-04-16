@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
     // variables for IPv6
     struct sockaddr_in6 ping_address6, *ipv6;
     struct sockaddr_in6 reply_address6;
-    socklen_t rely_address6_len;
+    socklen_t rely_address6_len = sizeof(struct sockaddr_in6);
     struct icmp6_hdr send_icmp6_hdr;
     struct ip6_hdr send_ip_hdr, *recv_ip6_ptr; // IPv6 header pointer
     struct icmp6_hdr *recv_icmp6_hdr_ptr;
@@ -86,6 +86,7 @@ int main(int argc, char *argv[])
     int pid = getpid(); // process id
     int num;
     int sk; // socket file descriptor
+    int recv_sk;
     struct timeval time_sent, time_received;
     struct timeval timeout; // timeout for select loop
     int num_sent = 0;
@@ -115,10 +116,17 @@ int main(int argc, char *argv[])
         memset(recv_ip6_packet, 0, IP_MAXPACKET * sizeof(uint8_t));
 
         // setup socket
-        sk = socket(AF_INET6, SOCK_RAW, IPPROTO_IPV6);
+        sk = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
         if (sk < 0)
         {
             printf("IPv6: socket error\n");
+            exit(1);
+        }
+
+        recv_sk = socket(AF_INET6, SOCK_RAW, IPPROTO_IPV6);
+        if (recv_sk < 0)
+        {
+            printf("IPv6: recv socket error\n");
             exit(1);
         }
 
@@ -214,22 +222,12 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        // hostname = gethostbyname(host);
-        // if (!hostname)
-        // {
-        //     printf("cannot resolve hostname\n");
-        //     exit(1);
-        // }
-        memset(&ping_address6, 0, sizeof(struct sockaddr_in6)); // init ping_address
+        // init ping_address
+        memset(&ping_address6, 0, sizeof(struct sockaddr_in6));
         ping_address6.sin6_family = AF_INET6;
-        memcpy(&ping_address6.sin6_addr, dest_ip, sizeof(ping_address6.sin6_addr));
+        // memcpy(&ping_address6.sin6_addr, &(ipv6->sin6_addr), sizeof(ping_address6.sin6_addr));
+        memcpy(&ping_address6.sin6_addr, &(ipv6->sin6_addr), sizeof(ping_address6.sin6_addr));
         ping_address6.sin6_port = htons(port);
-        // setup socket
-
-        // copy ICMP header
-        memcpy(send_icmp6_packet, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
-        // copy ICMP data
-        memcpy(send_icmp6_packet + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
 
         recv_ip6_ptr = (struct ip6_hdr *)(recv_ip6_packet);
         recv_icmp6_hdr_ptr = (struct icmp6_hdr *)(recv_ip6_packet + IP6_HDRLEN);
@@ -270,10 +268,12 @@ int main(int argc, char *argv[])
                 if (use_ipv6)
                 {
                     ret = recvfrom(sk, recv_ip6_packet, IP_MAXPACKET, 0,
-                                   (struct sockaddr *)&reply_address6, &rely_address_len);
+                                   (struct sockaddr *)&reply_address6, &rely_address6_len);
                     // int server_ip = client_addr.sin_addr.s_addr;
                     // recv_ip6_ptr = (struct ip6_hdr *)recv_ip6_packet;
                     // recv_icmp6_ptr = recv_ip_packet + (sizeof(struct ip6_hdr) << 2);
+                    printf("received num is %d\n", ret);
+
                     // record current time and report
                     gettimeofday(&time_received, NULL);
                     num_received++;
@@ -325,6 +325,7 @@ int main(int argc, char *argv[])
                 send_icmp6_hdr.icmp6_id = pid;
                 send_icmp6_hdr.icmp6_seq = num_sent;
                 send_icmp6_hdr.icmp6_cksum = 0;
+                send_icmp6_hdr.icmp6_cksum = icmp6_checksum(send_ip_hdr, send_icmp6_hdr, data, data_len);
 
                 // char buff[sizeof(ping_packet) + 16 + 3];
                 // unsigned short src_ip[8] = { 0 } //fill the source IP
@@ -343,10 +344,10 @@ int main(int argc, char *argv[])
                 memcpy(send_icmp6_packet, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
                 // copy ICMP data
                 memcpy(send_icmp6_packet + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
-                send_icmp6_hdr.icmp6_cksum = icmp6_checksum(send_ip_hdr, send_icmp6_hdr, data, data_len);
 
                 ret = sendto(sk, send_icmp6_packet, sizeof(*send_icmp6_packet), 0,
                              (struct sockaddr *)&ping_address6, sizeof(ping_address6));
+                printf("IPV6 packet sent\n");
                 // ret = sendto(sk, &ping6_packet, sizeof(ping6_packet), 0,
                 //              res->ai_addr, sizeof(res->ai_addrlen));
             }
