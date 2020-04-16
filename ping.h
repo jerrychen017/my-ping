@@ -36,6 +36,15 @@
 #define ICMP_LEN 16
 #define ICMP_HDRLEN 8
 #define IP6_HDRLEN 40
+#define DATA_LEN 32
+
+// ICMPv6 echo request body
+
+struct icmp6_echo_request
+{
+    unsigned short icmp6_echo_id;
+    unsigned short icmp6_echo_sequence;
+};
 
 unsigned short
 checksum(void *buffer, int len);

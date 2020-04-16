@@ -70,6 +70,7 @@ int main(int argc, char *argv[])
 
     // variables for IPv6
     struct sockaddr_in6 ping_address6, *ipv6;
+    socklen_t ipv6_len;
     struct sockaddr_in6 reply_address6;
     socklen_t rely_address6_len = sizeof(struct sockaddr_in6);
     struct icmp6_hdr send_icmp6_hdr;
@@ -124,64 +125,26 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        // hostname = gethostbyname(host);
-        // if (!hostname)
-        // {
-        //     printf("cannot resolve hostname\n");
-        //     exit(1);
-        // }
-
-        // struct ifaddrs *ifa, *ifa_tmp;
-        // char addr[50];
-        // bool my_addr_found = false;
-        // if (getifaddrs(&ifa) == -1)
-        // {
-        //     perror("getifaddrs failed");
-        //     exit(1);
-        // }
-
-        // ifa_tmp = ifa;
-        // while (ifa_tmp)
-        // {
-        //     if ((ifa_tmp->ifa_addr) && (ifa_tmp->ifa_addr->sa_family == AF_INET6))
-        //     {
-        //         // AF_INET6
-        //         // create IPv6 string
-        //         struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)ifa_tmp->ifa_addr;
-        //         inet_ntop(AF_INET6, &in6->sin6_addr, addr, sizeof(addr));
-        //         if (strlen(ifa_tmp->ifa_name) >= 2 && ifa_tmp->ifa_name[0] == 'e' && ifa_tmp->ifa_name[1] == 'n')
-        //         {
-        //             // ethernet interface
-        //             my_addr_found = true;
-        //             strcpy(source_ip, addr);
-        //             break;
-        //         }
-        //     }
-        //     ifa_tmp = ifa_tmp->ifa_next;
-        // }
-        // if (!my_addr_found)
-        // {
-        //     printf("source address not found on ethernet interface\n");
-        //     exit(1);
-        // }
-
         char addr[50];
         int fd;
         struct ifreq ifr;
         fd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-        /* I want to get an IPv6 IP address */
         ifr.ifr_addr.sa_family = AF_INET6;
-        /* I want IP address attached to "eth0" */
+        // get IP address attached to "eth0"
         strncpy(ifr.ifr_name, "eth0", IFNAMSIZ - 1);
         ioctl(fd, SIOCGIFADDR, &ifr);
         close(fd);
-        /* display result */
         in6 = (struct sockaddr_in6 *)&ifr.ifr_addr;
         inet_ntop(AF_INET6, &(in6->sin6_addr), addr, sizeof(addr));
         // printf("%s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
         printf("addr is %s", addr);
         strcpy(source_ip, addr);
-        // return 0;
+
+        // ret = bind(sk, in6, sizeof(struct sockaddr_in6));
+        // if (ret < 0)
+        // {
+        //     printf("bind error!\n");
+        // }
 
         strcpy(target, argv[1]);
         // prepare hints for getaddrinfo().
@@ -200,6 +163,7 @@ int main(int argc, char *argv[])
         }
 
         ipv6 = (struct sockaddr_in6 *)res->ai_addr;
+        ipv6_len = res->ai_addrlen;
 
         if (inet_ntop(AF_INET6, &(ipv6->sin6_addr), dest_ip, INET6_ADDRSTRLEN) == NULL)
         {
@@ -207,39 +171,40 @@ int main(int argc, char *argv[])
             printf("Error occurred in inet_ntop() when getting dest_ip");
             exit(1);
         }
-        freeaddrinfo(res);
+        printf("dest addr is !!! %s", dest_ip);
+        // freeaddrinfo(res);
 
-        // initialize data
-        data_len = 4;
-        data[0] = 'T';
-        data[1] = 'e';
-        data[2] = 's';
-        data[3] = 't';
+        // // initialize data
+        // data_len = 4;
+        // data[0] = 'T';
+        // data[1] = 'e';
+        // data[2] = 's';
+        // data[3] = 't';
 
-        // IPv6 version (4 bits), Traffic class (8 bits), Flow label (20 bits)
-        send_ip_hdr.ip6_flow = htonl((6 << 28) | (0 << 20) | 0);
-        // Payload length (16 bits): ICMP header + ICMP data
-        send_ip_hdr.ip6_plen = htons(ICMP_HDRLEN + data_len);
-        // Next header (8 bits): 58 for ICMP
-        send_ip_hdr.ip6_nxt = IPPROTO_ICMPV6;
-        // Hop limit (8 bits): default to maximum value
-        send_ip_hdr.ip6_hops = 255;
+        // // IPv6 version (4 bits), Traffic class (8 bits), Flow label (20 bits)
+        // send_ip_hdr.ip6_flow = htonl((6 << 28) | (0 << 20) | 0);
+        // // Payload length (16 bits): ICMP header + ICMP data
+        // send_ip_hdr.ip6_plen = htons(ICMP_HDRLEN + data_len);
+        // // Next header (8 bits): 58 for ICMP
+        // send_ip_hdr.ip6_nxt = IPPROTO_ICMPV6;
+        // // Hop limit (8 bits): default to maximum value
+        // send_ip_hdr.ip6_hops = 255;
 
-        // Source IPv6 address
-        ret = inet_pton(AF_INET6, source_ip, &(send_ip_hdr.ip6_src));
-        if (ret != 1)
-        {
-            printf("Error occurred in inet_pton(): assigning source address\n");
-            exit(1);
-        }
+        // // Source IPv6 address
+        // ret = inet_pton(AF_INET6, source_ip, &(send_ip_hdr.ip6_src));
+        // if (ret != 1)
+        // {
+        //     printf("Error occurred in inet_pton(): assigning source address\n");
+        //     exit(1);
+        // }
 
-        // Destination IPv6 address
-        ret = inet_pton(AF_INET6, dest_ip, &(send_ip_hdr.ip6_dst));
-        if (ret != 1)
-        {
-            printf("Error occurred in inet_pton(): assigning source address\n");
-            exit(1);
-        }
+        // // Destination IPv6 address
+        // ret = inet_pton(AF_INET6, dest_ip, &(send_ip_hdr.ip6_dst));
+        // if (ret != 1)
+        // {
+        //     printf("Error occurred in inet_pton(): assigning source address\n");
+        //     exit(1);
+        // }
 
         // init ping_address
         memset(&ping_address6, 0, sizeof(struct sockaddr_in6));
@@ -354,42 +319,78 @@ int main(int argc, char *argv[])
         {
             if (use_ipv6)
             {
-                memset(&send_icmp6_hdr, 0, sizeof(send_icmp6_hdr));
-                send_icmp6_hdr.icmp6_type = 128; // ECHO_REQUEST type
-                send_icmp6_hdr.icmp6_code = 0;   // ECHO_REQUEST code
-                send_icmp6_hdr.icmp6_id = pid;
-                send_icmp6_hdr.icmp6_seq = num_sent;
-                send_icmp6_hdr.icmp6_cksum = 0;
 
-                int pkt_len = sizeof(send_icmp6_hdr) + 19 * sizeof(unsigned short);
+                int icmp6_pkt_len = sizeof(struct icmp6_hdr) + sizeof(struct icmp6_echo_request) + DATA_LEN;
+                char *icmp6_pkt; // ICMPv6 packet
+                icmp6_pkt = (char *)malloc(icmp6_pkt_len * sizeof(char));
+                memset(icmp6_pkt, 0, icmp6_pkt_len * sizeof(char));
+                if (!icmp6_pkt)
+                {
+                    printf("Error occurred when allcating memory for ICMPv6 packet\n");
+                    exit(1);
+                }
 
-                char buff[pkt_len];
-                unsigned short src_ip[8] = {0}; //fill the source IP
-                unsigned short dst_ip[8] = {0}; //fill the destination IP
-                //0x0020 is the packet length of ICMPv6
-                //fill 3bytes of zero and 0x3a is the type of ICMPv6, so we have
-                //0x00, 0x003a
-                unsigned short remain[] = {0x0020,
-                                           0x0000,
-                                           0x003a};
-                unsigned short data[] = {}; //as beforep
-                memcpy(src_ip, &(send_ip_hdr.ip6_src), 8 * sizeof(unsigned short));
-                memcpy(dst_ip, &(send_ip_hdr.ip6_dst), 8 * sizeof(unsigned short));
-                memcpy(buff, src_ip, 8 * sizeof(unsigned short));
-                memcpy(buff + 8 * sizeof(unsigned short), dest_ip, 8 * sizeof(unsigned short));
-                memcpy(buff + 16 * sizeof(unsigned short), remain, 3 * sizeof(unsigned short));
-                memcpy(buff + 19 * sizeof(unsigned short) + sizeof(send_icmp6_hdr), &send_icmp6_hdr, sizeof(send_icmp6_hdr));
+                // initialize ICMPv6 header
+                struct icmp6_hdr *icmp6_hdr_pointer = NULL;
+                struct icmp6_echo_request *icmp6_request_pointer = NULL;
+                icmp6_hdr_pointer = (struct icmp6_hdr *)icmp6_pkt;
+                icmp6_hdr_pointer->icmp6_type = 128; // ECHO_REQUEST type
+                icmp6_hdr_pointer->icmp6_code = 0;   // ECHO_REQUEST code
+                icmp6_hdr_pointer->icmp6_cksum = 0;
+                icmp6_request_pointer = (struct icmp6_echo_request *)(icmp6_pkt + sizeof(struct icmp6_hdr));
+                icmp6_request_pointer->icmp6_echo_id = pid;
+                icmp6_request_pointer->icmp6_echo_sequence = num_sent;
 
                 // send_icmp6_hdr.icmp6_cksum = icmp6_checksum(send_ip_hdr, send_icmp6_hdr, data, data_len);
-                send_icmp6_hdr.icmp6_cksum = checksum(&buff, pkt_len);
+                // calculate checksum
+                char tmp[IP_MAXPACKET], *tmp_ptr;
+                tmp_ptr = tmp;
+                int total_len = 0;
+                &(in6->sin6_addr);
 
-                // copy ICMP header
-                memcpy(send_icmp6_packet, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
-                // copy ICMP data
-                memcpy(send_icmp6_packet + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
+                // copy source address
+                memcpy(tmp_ptr, &(in6->sin6_addr), sizeof(struct in6_addr));
+                tmp_ptr += sizeof(struct in6_addr);
+                total_len += sizeof(struct in6_addr);
+                // copy destination address
+                memcpy(tmp_ptr, &(ipv6->sin6_addr), sizeof(struct in6_addr));
+                tmp_ptr += sizeof(struct in6_addr);
+                total_len += sizeof(struct in6_addr);
+                // copy ICMPv6 packet length
+                int icmp6_len = htonl(icmp6_pkt_len);
+                memcpy(tmp_ptr, &icmp6_len, sizeof(icmp6_len));
+                tmp_ptr += sizeof(icmp6_len);
+                total_len += sizeof(icmp6_len);
+                // set three bytes to 0
+                memset(tmp_ptr, 0, 3);
+                tmp_ptr += 3;
+                tmp_ptr += 3;
+                // copy next hop header
+                char protocol = IPPROTO_ICMPV6;
+                memcpy(tmp_ptr, &protocol, sizeof(protocol));
+                tmp_ptr += sizeof(protocol);
+                total_len += sizeof(protocol);
+                // copy the ICMP header and data
+                memcpy(tmp_ptr, icmp6_pkt, icmp6_pkt_len);
+                tmp_ptr += icmp6_pkt_len;
+                total_len += icmp6_pkt_len;
 
-                int len = ICMP_HDRLEN * sizeof(uint8_t) + data_len * sizeof(uint8_t);
-                ret = sendto(sk, buff, pkt_len, 0,
+                for (int i = 0; i < icmp6_pkt_len % 2; i++)
+                {
+                    *tmp_ptr = 0;
+                    total_len++;
+                    total_len++;
+                }
+
+                icmp6_hdr_pointer->icmp6_cksum = checksum(tmp, total_len);
+
+                // // copy ICMP header
+                // memcpy(send_icmp6_packet, &send_icmp6_hdr, ICMP_HDRLEN * sizeof(uint8_t));
+                // // copy ICMP data
+                // memcpy(send_icmp6_packet + ICMP_HDRLEN, data, data_len * sizeof(uint8_t));
+
+                // int len = ICMP_HDRLEN * sizeof(uint8_t) + data_len * sizeof(uint8_t);
+                ret = sendto(sk, icmp6_pkt, icmp6_pkt_len, 0,
                              (struct sockaddr *)&ping_address6, sizeof(struct sockaddr_in6));
                 printf("IPV6 packet sent\n");
                 // ret = sendto(sk, &ping6_packet, sizeof(ping6_packet), 0,
@@ -416,109 +417,6 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-// unsigned short ComputeIcmp6PseudoHeaderChecksum(int s, char *icmppacket, int icmplen, struct addrinfo *dest)
-
-// {
-
-//     SOCKADDR_STORAGE localif;
-
-//     DWORD bytes;
-
-//     char tmp[65535], *ptr = NULL, proto = 0, zero = 0;
-
-//     int rc, total, length, i;
-
-//     // Find out which local interface for the destination
-
-//     rc = WSAIoctl(s, SIO_ROUTING_INTERFACE_QUERY, dest->ai_addr, dest->ai_addrlen,
-
-//                   (SOCKADDR *)&localif, sizeof(localif), &bytes, NULL, NULL);
-
-//     if (rc == SOCKET_ERROR)
-
-//     {
-
-//         fprintf(stderr, "WSAIoctl() failed with error code %d\n", WSAGetLastError());
-
-//         return -1;
-//     }
-
-//     else
-
-//         printf("WSAIoctl() is OK!\n");
-
-//     // We use a temporary buffer to calculate the pseudo header.
-
-//     ptr = tmp;
-
-//     total = 0;
-
-//     // Copy source address
-
-//     memcpy(ptr, &((SOCKADDR_IN6 *)&localif)->sin6_addr, sizeof(struct in6_addr));
-
-//     ptr += sizeof(struct in6_addr);
-
-//     total += sizeof(struct in6_addr);
-
-//     // Copy destination address
-
-//     memcpy(ptr, &((SOCKADDR_IN6 *)dest->ai_addr)->sin6_addr, sizeof(struct in6_addr));
-
-//     ptr += sizeof(struct in6_addr);
-
-//     total += sizeof(struct in6_addr);
-
-//     // Copy ICMP packet length
-
-//     length = htonl(icmplen);
-
-//     memcpy(ptr, &length, sizeof(length));
-
-//     ptr += sizeof(length);
-
-//     total += sizeof(length);
-
-//     // Zero the 3 bytes
-
-//     memset(ptr, 0, 3);
-
-//     ptr += 3;
-
-//     total += 3;
-
-//     // Copy next hop header
-
-//     proto = IPPROTO_ICMP6;
-
-//     memcpy(ptr, &proto, sizeof(proto));
-
-//     ptr += sizeof(proto);
-
-//     total += sizeof(proto);
-
-//     // Copy the ICMP header and payload
-
-//     memcpy(ptr, icmppacket, icmplen);
-
-//     ptr += icmplen;
-
-//     total += icmplen;
-
-//     for (i = 0; i < icmplen % 2; i++)
-
-//     {
-
-//         *ptr = 0;
-
-//         ptr++;
-
-//         total++;
-//     }
-
-//     return checksum((USHORT *)tmp, total);
-// }
 
 uint16_t
 icmp6_checksum(struct ip6_hdr iphdr, struct icmp6_hdr icmp6hdr, uint8_t *payload, int payloadlen)
