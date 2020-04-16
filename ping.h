@@ -42,8 +42,8 @@
 
 struct icmp6_echo_request
 {
-    unsigned short icmp6_echo_id;
     unsigned short icmp6_echo_sequence;
+    unsigned short icmp6_echo_id;
 };
 
 unsigned short

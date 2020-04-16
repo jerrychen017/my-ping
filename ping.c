@@ -22,7 +22,6 @@ int main(int argc, char *argv[])
     // read the rest args
     for (int i = 2; i < argc; i++)
     {
-
         if (strcmp(argv[i], "-TTL") == 0)
         {
             if (i == argc - 1)
@@ -69,19 +68,20 @@ int main(int argc, char *argv[])
     struct hostent *hostname;
 
     // variables for IPv6
+    uint8_t *recv_icmp6_packet;                    // received ICMPv6 packet
+    char *icmp6_pkt;                               // ICMPv6 packet to be sent
+    int icmp6_pkt_len;                             // total length to ICMPv6 packet
+    struct icmp6_echo_request *recv_icmp6_req_ptr; // points to ICMPv6 type field
+
     struct sockaddr_in6 ping_address6, *ipv6;
     socklen_t ipv6_len;
     struct sockaddr_in6 reply_address6;
     socklen_t rely_address6_len = sizeof(struct sockaddr_in6);
     struct icmp6_hdr send_icmp6_hdr;
-    struct ip6_hdr send_ip_hdr, *recv_ip6_ptr; // IPv6 header pointer
     struct icmp6_hdr *recv_icmp6_hdr_ptr;
     char *source_ip, *dest_ip, *target;
     struct addrinfo hints, *res;
     void *tmp;
-    int data_len;
-    uint8_t *data;
-    uint8_t *recv_ip6_packet, *send_icmp6_packet;
     struct sockaddr_in6 *in6;
 
     // uesd for both IPv6 and IPv4
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
     int recv_sk;
     struct timeval time_sent, time_received;
     struct timeval timeout; // timeout for select loop
-    int num_sent = 0;
+    unsigned short num_sent = 0;
     int num_received = 0;
     fd_set mask;
     fd_set read_mask;
@@ -108,14 +108,8 @@ int main(int argc, char *argv[])
         target = (char *)malloc(INET6_ADDRSTRLEN * sizeof(char));
         memset(target, 0, INET6_ADDRSTRLEN * sizeof(char));
 
-        data = (uint8_t *)malloc(IP_MAXPACKET * sizeof(uint8_t));
-        memset(data, 0, IP_MAXPACKET * sizeof(uint8_t));
-
-        send_icmp6_packet = (uint8_t *)malloc(ICMPV6_PLD_MAXLEN * sizeof(uint8_t));
-        memset(send_icmp6_packet, 0, ICMPV6_PLD_MAXLEN * sizeof(uint8_t));
-
-        recv_ip6_packet = (uint8_t *)malloc(IP_MAXPACKET * sizeof(uint8_t));
-        memset(recv_ip6_packet, 0, IP_MAXPACKET * sizeof(uint8_t));
+        recv_icmp6_packet = (uint8_t *)malloc(ICMPV6_PLD_MAXLEN * sizeof(uint8_t));
+        memset(recv_icmp6_packet, 0, ICMPV6_PLD_MAXLEN * sizeof(uint8_t));
 
         // setup socket
         sk = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
@@ -139,12 +133,6 @@ int main(int argc, char *argv[])
         // printf("%s\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
         printf("addr is %s", addr);
         strcpy(source_ip, addr);
-
-        // ret = bind(sk, in6, sizeof(struct sockaddr_in6));
-        // if (ret < 0)
-        // {
-        //     printf("bind error!\n");
-        // }
 
         strcpy(target, argv[1]);
         // prepare hints for getaddrinfo().
@@ -174,47 +162,12 @@ int main(int argc, char *argv[])
         printf("dest addr is !!! %s", dest_ip);
         // freeaddrinfo(res);
 
-        // // initialize data
-        // data_len = 4;
-        // data[0] = 'T';
-        // data[1] = 'e';
-        // data[2] = 's';
-        // data[3] = 't';
-
-        // // IPv6 version (4 bits), Traffic class (8 bits), Flow label (20 bits)
-        // send_ip_hdr.ip6_flow = htonl((6 << 28) | (0 << 20) | 0);
-        // // Payload length (16 bits): ICMP header + ICMP data
-        // send_ip_hdr.ip6_plen = htons(ICMP_HDRLEN + data_len);
-        // // Next header (8 bits): 58 for ICMP
-        // send_ip_hdr.ip6_nxt = IPPROTO_ICMPV6;
-        // // Hop limit (8 bits): default to maximum value
-        // send_ip_hdr.ip6_hops = 255;
-
-        // // Source IPv6 address
-        // ret = inet_pton(AF_INET6, source_ip, &(send_ip_hdr.ip6_src));
-        // if (ret != 1)
-        // {
-        //     printf("Error occurred in inet_pton(): assigning source address\n");
-        //     exit(1);
-        // }
-
-        // // Destination IPv6 address
-        // ret = inet_pton(AF_INET6, dest_ip, &(send_ip_hdr.ip6_dst));
-        // if (ret != 1)
-        // {
-        //     printf("Error occurred in inet_pton(): assigning source address\n");
-        //     exit(1);
-        // }
-
         // init ping_address
         memset(&ping_address6, 0, sizeof(struct sockaddr_in6));
         ping_address6.sin6_family = AF_INET6;
         memcpy(&ping_address6.sin6_addr, &(ipv6->sin6_addr), sizeof(ping_address6.sin6_addr));
         // memcpy(&ping_address6.sin6_addr, hostname->h_addr, sizeof(ping_address6.sin6_addr));
         ping_address6.sin6_port = htons(port);
-
-        recv_ip6_ptr = (struct ip6_hdr *)(recv_ip6_packet);
-        recv_icmp6_hdr_ptr = (struct icmp6_hdr *)(recv_ip6_packet + IP6_HDRLEN);
     }
     else
     {
@@ -251,44 +204,27 @@ int main(int argc, char *argv[])
             {
                 if (use_ipv6)
                 {
-                    ret = recvfrom(sk, recv_ip6_packet, IP_MAXPACKET, 0,
-                                   (struct sockaddr *)&reply_address6, &rely_address6_len);
-                    // int server_ip = client_addr.sin_addr.s_addr;
-                    // recv_ip6_ptr = (struct ip6_hdr *)recv_ip6_packet;
-                    // recv_icmp6_hdr_ptr = recv_ip6_packet + (sizeof(struct ip6_hdr) << 2);
+                    int len;
+                    ret = recvfrom(sk, recv_icmp6_packet, icmp6_pkt_len, 0,
+                                   (struct sockaddr *)&reply_address6, &len);
                     printf("received num is %d\n", ret);
-
-                    // recv_ip6_ptr = (struct ip6_hdr *)(recv_ip6_packet);
-                    if (recv_ip6_ptr)
+                    recv_icmp6_hdr_ptr = (struct icmp6_hdr *)(recv_icmp6_packet);
+                    recv_icmp6_req_ptr = (struct icmp6_echo_request *)(recv_icmp6_packet + sizeof(struct icmp6_hdr));
+                    for (int i = 0; i < 60; i++)
                     {
-                        char addr1[50];
-
-                        char addr2[50];
-                        inet_ntop(AF_INET6, &(recv_ip6_ptr->ip6_src), addr1, sizeof(addr1));
-                        inet_ntop(AF_INET6, &(recv_ip6_ptr->ip6_dst), addr2, sizeof(addr2));
-                        printf("source addr is %s and dest address is %s\n", addr1, addr2);
-                    }
-                    else
-                    {
-                        printf("null\n");
+                        printf("  %02x", recv_icmp6_packet[i] & 0xff);
                     }
 
-                    recv_icmp6_hdr_ptr = (struct icmp6_hdr *)(recv_ip6_packet + IP6_HDRLEN);
                     // record current time and report
                     gettimeofday(&time_received, NULL);
                     num_received++;
                     struct timeval rtt = diff_time(time_received, time_sent);
                     double rtt_msec = rtt.tv_sec * 1000 + ((double)rtt.tv_usec) / 1000;
-                    printf("Report: RTT of a PING packet is %f ms with sequence number %d\n", rtt_msec, recv_icmp6_hdr_ptr->icmp6_seq);
+
+                    printf("Report: RTT of a PING packet is %f ms with sequence number %d\n", rtt_msec, recv_icmp6_req_ptr->icmp6_echo_sequence);
                     printf("%d packets lost\n", num_sent - num_received);
-                    if (recv_icmp6_hdr_ptr->icmp6_type == ICMP6_ECHO_REPLY)
-                    {
-                        printf("reply packet!\n");
-                    }
-                    else
-                    {
-                        printf("type is %d code is %d\n", recv_icmp6_hdr_ptr->icmp6_type, recv_icmp6_hdr_ptr->icmp6_code);
-                    }
+
+                    printf("type is %d code is %d\n", recv_icmp6_hdr_ptr->icmp6_type, recv_icmp6_hdr_ptr->icmp6_code);
                 }
                 else
                 {
@@ -320,8 +256,7 @@ int main(int argc, char *argv[])
             if (use_ipv6)
             {
 
-                int icmp6_pkt_len = sizeof(struct icmp6_hdr) + sizeof(struct icmp6_echo_request) + DATA_LEN;
-                char *icmp6_pkt; // ICMPv6 packet
+                icmp6_pkt_len = sizeof(struct icmp6_hdr) + sizeof(struct icmp6_echo_request) + DATA_LEN;
                 icmp6_pkt = (char *)malloc(icmp6_pkt_len * sizeof(char));
                 memset(icmp6_pkt, 0, icmp6_pkt_len * sizeof(char));
                 if (!icmp6_pkt)
@@ -378,7 +313,7 @@ int main(int argc, char *argv[])
                 for (int i = 0; i < icmp6_pkt_len % 2; i++)
                 {
                     *tmp_ptr = 0;
-                    total_len++;
+                    tmp_ptr++;
                     total_len++;
                 }
 
